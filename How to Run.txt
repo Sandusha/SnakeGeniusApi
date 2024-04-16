@@ -1,0 +1,6 @@
+1.Run the setup.bat file
+2.Go to myenv folder and run command prompt.
+3.Type "Scripts\activate" and Run.
+4.Type and Run "pip install -r requirements.txt"
+4.Navigate to Project Directory where the app.py exist."cd path/to/your/project/DogBreedClassification"
+5.Type and Run "python app.py" and go to http://localhost:5000 to access the web application.

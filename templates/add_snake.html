@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Snake Information</title>
+</head>
+<body>
+    <h2>Add Snake Information</h2>
+    <form id="snakeForm">
+        <label for="name">Name:</label><br>
+        <input type="text" id="name" name="name"><br>
+        <label for="image">Image URL:</label><br>
+        <input type="text" id="image" name="image"><br>
+        <label for="description">Description:</label><br>
+        <textarea id="description" name="description"></textarea><br>
+        <label for="endemism">Endemism:</label><br>
+        <input type="text" id="endemism" name="endemism"><br>
+        <label for="wikiLink">Wikipedia Link:</label><br>
+        <input type="text" id="wikiLink" name="wikiLink"><br><br>
+        <button type="submit">Add Snake</button>
+    </form>
+
+    <script>
+        document.getElementById("snakeForm").addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const formData = new FormData(event.target);
+            const formDataJson = Object.fromEntries(formData.entries());
+
+            const response = await fetch('http://localhost:5000/addsnake', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formDataJson)
+            });
+
+            const data = await response.json();
+            console.log(data);  // Log the response from Flask API
+        });
+    </script>
+</body>
+</html>

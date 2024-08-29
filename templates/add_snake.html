@@ -3,42 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Snake Information</title>
+    <title>Snake Information Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            color: #333;
+            text-align: center;
+        }
+
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        button[type="button"] {
+            margin-right: 10px;
+        }
+
+        button[type="submit"] {
+            background-color: #008CBA;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
 <body>
-    <h2>Add Snake Information</h2>
+    <h2>Snake Information Management</h2>
+
+    <!-- Search form -->
+    <form id="searchForm">
+        <label for="searchName">Search by Name:</label>
+        <input type="text" id="searchName" name="searchName">
+        <button type="button" onclick="searchSnake()">Search</button>
+    </form>
+
+    <!-- Display and update form -->
     <form id="snakeForm">
-        <label for="name">Name:</label><br>
+        <label for="name">Name:</label>
         <input type="text" id="name" name="name"><br>
-        <label for="image">Image URL:</label><br>
+        <label for="image">Image URL:</label>
         <input type="text" id="image" name="image"><br>
-        <label for="description">Description:</label><br>
+        <label for="description">Description:</label>
         <textarea id="description" name="description"></textarea><br>
-        <label for="endemism">Endemism:</label><br>
+        <label for="endemism">Endemism:</label>
         <input type="text" id="endemism" name="endemism"><br>
-        <label for="wikiLink">Wikipedia Link:</label><br>
+        <label for="wikiLink">Wikipedia Link:</label>
         <input type="text" id="wikiLink" name="wikiLink"><br><br>
-        <button type="submit">Add Snake</button>
+
+        <!-- Add button -->
+        <button type="button" onclick="addSnake()">Add Snake</button>
+        <!-- Update button -->
+        <button type="button" onclick="updateSnake()">Update Snake</button>
+        <!-- Delete button -->
+        <button type="button" onclick="deleteSnake()">Delete Snake</button>
     </form>
 
     <script>
-        document.getElementById("snakeForm").addEventListener("submit", async function(event) {
-            event.preventDefault();
+        async function searchSnake() {
+            const searchName = document.getElementById("searchName").value.trim();
+            if (searchName === "") {
+                alert("Please enter a snake name to search.");
+                return;
+            }
 
-            const formData = new FormData(event.target);
+            try {
+                const response = await fetch(`http://localhost:5000/searchsnake/${searchName}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    const snake = data.snake;
+                    document.getElementById("name").value = snake.name;
+                    document.getElementById("image").value = snake.image;
+                    document.getElementById("description").value = snake.description;
+                    document.getElementById("endemism").value = snake.endemism;
+                    document.getElementById("wikiLink").value = snake.wikiLink;
+                } else {
+                    alert(data.error || "Snake not found.");
+                }
+            } catch (error) {
+                console.error("Error searching snake:", error);
+                alert("An error occurred while searching snake.");
+            }
+        }
+
+        async function addSnake() {
+            const formData = new FormData(document.getElementById("snakeForm"));
             const formDataJson = Object.fromEntries(formData.entries());
 
-            const response = await fetch('http://localhost:5000/addsnake', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formDataJson)
-            });
+            try {
+                const response = await fetch('http://localhost:5000/addsnake', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formDataJson)
+                });
 
-            const data = await response.json();
-            console.log(data);  // Log the response from Flask API
-        });
+                const data = await response.json();
+                alert(data.message);
+            } catch (error) {
+                console.error("Error adding snake:", error);
+                alert("An error occurred while adding snake.");
+            }
+        }
+
+        async function updateSnake() {
+            const formData = new FormData(document.getElementById("snakeForm"));
+            const formDataJson = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch(`http://localhost:5000/updatesnake/${formDataJson.name}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formDataJson)
+                });
+
+                const data = await response.json();
+                alert(data.message);
+            } catch (error) {
+                console.error("Error updating snake:", error);
+                alert("An error occurred while updating snake.");
+            }
+        }
+
+        async function deleteSnake() {
+            const name = document.getElementById("name").value.trim();
+            if (name === "") {
+                alert("Please search for a snake before deleting.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:5000/deletesnake/${name}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                alert(data.message);
+            } catch (error) {
+                console.error("Error deleting snake:", error);
+                alert("An error occurred while deleting snake.");
+            }
+        }
     </script>
 </body>
 </html>

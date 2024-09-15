@@ -14,24 +14,33 @@ import uuid
 import os
 from bson import ObjectId
 from datetime import datetime
+from datetime import timedelta
+from dotenv import load_dotenv
 
+load_dotenv()
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
-app.config['JWT_SECRET_KEY'] = '22769be494538c5d3820475f3ea5ac2906dd240c34937562444d6eb293bcc22e'  # Change this to a secure key
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')  # Get JWT Secret Key
+uri = os.getenv('MONGO_URI')  # Get MongoDB URI
+app.config['TESTING'] = False
 jwt = JWTManager(app)
-uri = "mongodb+srv://nemezis:Coc12345@snakeg1.dc5b1p2.mongodb.net/?retryWrites=true&w=majority"
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all origins
 
 # Create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
-db = client.SnakesG1
+if app.config['TESTING']:
+    db = client.SnakesG1_test  # Use test database
+else:
+    db = client.SnakesG1 
+
 users_collection = db.users
+snakes_collection = db.snakes 
 
 # Load your trained snake prediction model
 model = load_model("mobilenet-ft.h5")
 
 # Define your list of snake classes
-class_list = ["cobra", "common Krait", "Hump nosed pit viper", "Python", "Rat snake", "russell's viper", "Saw Scaled Viper"]
+class_list = ["Cobra", "Common Krait", "Hump nosed pit viper", "Python", "Rat snake", "Russell's viper", "Saw Scaled Viper"]
 
 def serialize_snake(snake):
     # Convert ObjectId to string for JSON serialization
@@ -68,15 +77,17 @@ def home():
     """Serves a basic message for the root path."""
     return "Snake Prediction API is running!"
 
-def serialize_user(user):
-    user['_id'] = str(user['_id'])
-    return user
 
 @app.route('/register', methods=['POST'])
 def register():
     data = request.json
     if not data or not data.get('email') or not data.get('password'):
         return jsonify({"error": "Email and password are required"}), 400
+
+    # Check if the email is already registered
+    existing_user = users_collection.find_one({"email": data['email']})
+    if existing_user:
+        return jsonify({"error": "Email is already registered"}), 400
 
     hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
     user = {
@@ -99,8 +110,12 @@ def login():
 
     user = db.users.find_one({"email": data['email']})
     if user and bcrypt.check_password_hash(user['password'], data['password']):
-        access_token = create_access_token(identity=str(user['_id']))
-        return jsonify({"token": access_token}), 200
+        # Set token expiration
+        access_token = create_access_token(
+            identity=str(user['_id']),
+            expires_delta=timedelta(hours=1)  # Token expires in 1 hour
+        )
+        return jsonify({"token": access_token, "user_id": str(user['_id'])}), 200
     else:
         return jsonify({"error": "Invalid credentials"}), 401
 
@@ -124,51 +139,43 @@ def change_password():
     user_id = get_jwt_identity()
     user = db.users.find_one({"_id": ObjectId(user_id)})
 
+    # Check if the old password is correct
     if user and bcrypt.check_password_hash(user['password'], data['old_password']):
         hashed_password = bcrypt.generate_password_hash(data['new_password']).decode('utf-8')
         db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"password": hashed_password}})
         return jsonify({"message": "Password updated successfully"}), 200
     else:
-        return jsonify({"error": "Invalid credentials"}), 401
-
+        # Provide a specific error message for the incorrect old password
+        return jsonify({"error": "The old password is wrong"}), 401
+    
 @app.route("/addsnake", methods=["POST"])
 def add_snake():
-    data = request.json  # Assuming request contains JSON data with snake info
-    if data:
-        try:
-            db = client.SnakesG1  # Access the database
-            collection = db.snakes  # Access the collection
-            inserted_id = collection.insert_one(data).inserted_id
-            return jsonify({"message": "Snake added successfully", "id": str(inserted_id)})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    else:
-        return jsonify({"error": "No data provided"}), 400
+    data = request.json
+    if not data or not all(field in data for field in ('name', 'image', 'description', 'endemism', 'wikiLink')):
+        return jsonify({'error': 'Missing data'}), 400
+
+    if snakes_collection.find_one({'name': data['name']}):
+        return jsonify({'error': 'Snake already exists'}), 400
+
+    snakes_collection.insert_one(data)
+    return jsonify({'message': 'Snake added successfully'}), 201
     
 @app.route("/updatesnake/<name>", methods=["PUT"])
 def update_snake(name):
     data = request.json
-    if data:
-        try:
-            db = client.SnakesG1
-            collection = db.snakes
-            result = collection.update_one({"name": name}, {"$set": data})
+    if not data or not all(field in data for field in ('name', 'image', 'description', 'endemism', 'wikiLink')):
+        return jsonify({'error': 'Missing data'}), 400
 
-            if result.modified_count > 0:
-                return jsonify({"message": f"Snake '{name}' updated successfully"})
-            else:
-                return jsonify({"error": f"Snake '{name}' not found"}), 404
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    else:
-        return jsonify({"error": "No data provided"}), 400
+    result = snakes_collection.update_one({'name': name}, {'$set': data})
+    if result.matched_count == 0:
+        return jsonify({'error': 'Snake not found'}), 404
+
+    return jsonify({'message': 'Snake updated successfully'}), 200
 
 @app.route("/deletesnake/<name>", methods=["DELETE"])
 def delete_snake(name):
     try:
-        db = client.SnakesG1
-        collection = db.snakes
-        result = collection.delete_one({"name": name})
+        result = snakes_collection.delete_one({"name": name})
 
         if result.deleted_count > 0:
             return jsonify({"message": f"Snake '{name}' deleted successfully"})
@@ -177,12 +184,15 @@ def delete_snake(name):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/snakelist', methods=['GET'])
+def snake_list():
+    snakes = list(snakes_collection.find({}, {'_id': 0, 'name': 1}))
+    return jsonify({'snakes': snakes}), 200
+
 @app.route("/searchsnake/<name>", methods=["GET"])
 def search_snake(name):
     try:
-        db = client.SnakesG1  # Access the database
-        collection = db.snakes
-        snake = collection.find_one({"name": name})
+        snake = snakes_collection.find_one({"name": name})
 
         if snake:
             serialized_snake = serialize_snake(snake)
@@ -193,12 +203,11 @@ def search_snake(name):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route("/snakes", methods=["GET"])
 def get_snakes():
     try:
-        db = client.SnakesG1  # Access the database
-        collection = db.snakes
-        snakes = list(collection.find({}))
+        snakes = list(snakes_collection.find({}))
 
         # Serialize each snake document
         serialized_snakes = [serialize_snake(snake) for snake in snakes]
@@ -206,7 +215,7 @@ def get_snakes():
         return jsonify({"snakes": serialized_snakes})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+    
 @app.route("/predict", methods=["POST"])
 @jwt_required(optional=True)  # Allow this route to be accessed both with and without JWT
 def predict():

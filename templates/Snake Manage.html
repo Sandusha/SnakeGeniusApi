@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Information Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #2c2c2c;
+            color: #f5f5f5;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            color: #e0e0e0;
+            text-align: center;
+        }
+
+        form {
+            background-color: #3c3c3c;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #444;
+            color: #f5f5f5;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button[type="button"] {
+            background-color: #4CAF50;
+            color: #fff;
+            margin-right: 10px;
+        }
+
+        button[type="submit"] {
+            background-color: #008CBA;
+            color: #fff;
+        }
+
+        button[type="button"]:hover,
+        button[type="submit"]:hover {
+            background-color: #45a049;
+        }
+
+        button[type="button"]:focus,
+        button[type="submit"]:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #888;
+        }
+
+        .btn-container {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+    <!-- Include jQuery and jQuery UI for autocomplete functionality -->
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+</head>
+<body>
+    <h2>Snake Information Management</h2>
+
+    <!-- Search form -->
+    <form id="searchForm">
+        <label for="searchName">Search by Name:</label>
+        <input type="text" id="searchName" name="searchName">
+        <input type="hidden" id="selectedSnakeName">
+        <button type="button" onclick="searchSnake()">Search</button>
+    </form>
+
+    <!-- Display and update form -->
+    <form id="snakeForm">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name"><br>
+        <label for="image">Image URL:</label>
+        <input type="text" id="image" name="image"><br>
+        <label for="description">Description:</label>
+        <textarea id="description" name="description"></textarea><br>
+        <label for="endemism">Endemism:</label>
+        <input type="text" id="endemism" name="endemism"><br>
+        <label for="wikiLink">Wikipedia Link:</label>
+        <input type="text" id="wikiLink" name="wikiLink"><br><br>
+
+        <div class="btn-container">
+            <!-- Add button -->
+            <button type="button" onclick="addSnake()">Add Snake</button>
+            <!-- Update button -->
+            <button type="button" onclick="updateSnake()">Update Snake</button>
+            <!-- Delete button -->
+            <button type="button" onclick="deleteSnake()">Delete Snake</button>
+            <!-- Clear button -->
+            <button type="button" onclick="clearForm()">Clear</button>
+        </div>
+    </form>
+
+    <script>
+        async function searchSnake() {
+            const searchName = document.getElementById("searchName").value.trim();
+            if (searchName === "") {
+                alert("Please enter a snake name to search.");
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/snakelist');
+                const data = await response.json();
+                const snakeNames = data.snakes.map(snake => snake.name);
+
+                $("#searchName").autocomplete({
+                    source: snakeNames,
+                    select: async (event, ui) => {
+                        const selectedName = ui.item.value;
+                        document.getElementById("selectedSnakeName").value = selectedName;
+                        const response = await fetch(`http://localhost:5000/searchsnake/${selectedName}`);
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            const snake = data.snake;
+                            document.getElementById("name").value = snake.name;
+                            document.getElementById("image").value = snake.image;
+                            document.getElementById("description").value = snake.description;
+                            document.getElementById("endemism").value = snake.endemism;
+                            document.getElementById("wikiLink").value = snake.wikiLink;
+                        } else {
+                            alert(data.error || "Snake not found.");
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error fetching snake list:", error);
+                alert("An error occurred while fetching snake list.");
+            }
+        }
+
+        async function addSnake() {
+            const formData = new FormData(document.getElementById("snakeForm"));
+            const formDataJson = Object.fromEntries(formData.entries());
+            
+            // Check for empty fields
+            for (const [key, value] of Object.entries(formDataJson)) {
+                if (value.trim() === "") {
+                    alert(`Field ${key} cannot be empty.`);
+                    return;
+                }
+            }
+
+            // Check for duplication
+            try {
+                const response = await fetch(`http://localhost:5000/searchsnake/${formDataJson.name}`);
+                const data = await response.json();
+                if (data.snake) {
+                    alert("Snake with this name already exists.");
+                    return;
+                }
+
+                // Proceed with adding the snake
+                const addResponse = await fetch('http://localhost:5000/addsnake', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formDataJson)
+                });
+
+                const addData = await addResponse.json();
+                alert(addData.message);
+                document.getElementById("snakeForm").reset();
+            } catch (error) {
+                console.error("Error adding snake:", error);
+                alert("An error occurred while adding snake.");
+            }
+        }
+
+        async function updateSnake() {
+            const formData = new FormData(document.getElementById("snakeForm"));
+            const formDataJson = Object.fromEntries(formData.entries());
+
+            // Check for empty fields
+            for (const [key, value] of Object.entries(formDataJson)) {
+                if (value.trim() === "") {
+                    alert(`Field ${key} cannot be empty.`);
+                    return;
+                }
+            }
+
+            try {
+                const response = await fetch(`http://localhost:5000/updatesnake/${formDataJson.name}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formDataJson)
+                });
+
+                const data = await response.json();
+                alert(data.message);
+                document.getElementById("snakeForm").reset();
+            } catch (error) {
+                console.error("Error updating snake:", error);
+                alert("An error occurred while updating snake.");
+            }
+        }
+
+        async function deleteSnake() {
+            const name = document.getElementById("selectedSnakeName").value.trim();
+            if (name === "") {
+                alert("Please search for a snake before deleting.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:5000/deletesnake/${name}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                alert(data.message);
+                document.getElementById("snakeForm").reset();
+            } catch (error) {
+                console.error("Error deleting snake:", error);
+                alert("An error occurred while deleting snake.");
+            }
+        }
+
+        function clearForm() {
+            document.getElementById("snakeForm").reset();
+            document.getElementById("searchName").value = "";
+            document.getElementById("selectedSnakeName").value = "";
+        }
+    </script>
+</body>
+</html>

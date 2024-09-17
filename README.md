@@ -27,7 +27,7 @@ Setup and Installation
 
     bash
 
-git clone https://github.com/yourusername/snake-prediction-api.git
+git clone [https://github.com/yourusername/snake-prediction-api.git](https://github.com/Sandusha/SnakeGeniusApi)
 cd snake-prediction-api
 
 Create a virtual environment and activate it:
